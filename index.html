@@ -646,7 +646,7 @@
       <div class="terminal-wrap">
         <button class="mobile-fold-toggle" id="mobileToggleChromeButton" type="button">收起顶部</button>
         <div class="terminal-stack" id="terminalStack"></div>
-        <div class="terminal-note">控制台会输出 [codex-web-terminal] 调试日志；复制标签不会新开浏览器窗口</div>
+        <div class="terminal-note">复制标签会新建独立会话；如需调试日志，请在地址后加 `?debug=1`</div>
       </div>
       <div class="resize-handle" data-dir="n" aria-hidden="true"></div>
       <div class="resize-handle" data-dir="s" aria-hidden="true"></div>
@@ -667,16 +667,26 @@
   <script src="./config.js"></script>
   <script>
     (() => {
-      const debug = (...args) => console.debug("[codex-web-terminal]", ...args);
       const params = new URLSearchParams(window.location.search);
+      const debugEnabled = params.get("debug") === "1" || localStorage.getItem("codex-web-terminal-debug") === "1";
+      const debug = (...args) => {
+        if (!debugEnabled) return;
+        console.debug("[codex-web-terminal]", ...args);
+      };
       const isEmbed = params.get("embed") === "1";
       let rafId = 0;
+      let dispatchingSyntheticResize = false;
 
       const dispatchResize = () => {
         if (rafId) cancelAnimationFrame(rafId);
         rafId = requestAnimationFrame(() => {
           rafId = 0;
-          window.dispatchEvent(new Event("resize"));
+          dispatchingSyntheticResize = true;
+          try {
+            window.dispatchEvent(new Event("resize"));
+          } finally {
+            dispatchingSyntheticResize = false;
+          }
         });
       };
 
@@ -702,7 +712,10 @@
           window.visualViewport.addEventListener("resize", updateViewportHeight);
           window.visualViewport.addEventListener("scroll", updateViewportHeight);
         }
-        window.addEventListener("resize", updateViewportHeight);
+        window.addEventListener("resize", () => {
+          if (dispatchingSyntheticResize) return;
+          updateViewportHeight();
+        });
         window.addEventListener("orientationchange", updateViewportHeight);
         window.setTimeout(updateViewportHeight, 80);
         window.setTimeout(updateViewportHeight, 320);
@@ -1121,7 +1134,10 @@
         applyMobileChromeState(nextCollapsed);
       });
       shellHeader.addEventListener("dblclick", centerLayout);
-      window.addEventListener("resize", loadLayout);
+      window.addEventListener("resize", () => {
+        if (dispatchingSyntheticResize) return;
+        loadLayout();
+      });
       if (window.visualViewport) {
         window.visualViewport.addEventListener("resize", loadLayout);
         window.visualViewport.addEventListener("scroll", loadLayout);
