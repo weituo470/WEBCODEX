@@ -1,36 +1,24 @@
 # Codex Web Terminal Lite
 
-The simplest reusable way to expose Codex in a browser on another Linux server.
+The fastest reusable way to expose Codex in a browser on another Linux server.
 
-## What it installs
+## What it does
 
-- `gotty` service on `127.0.0.1:8765`
-- `tmux`-backed Codex wrapper
-- persistent main session: `codex-main`
-- optional custom UI page if `index.html` exists next to `install.sh`
+- runs Codex through `tmux` for persistent sessions
+- exposes it through `gotty`
+- optionally writes nginx config and basic auth automatically
+- keeps the default main conversation in `codex-main`
+- includes the current multi-tab mobile-friendly web UI
 
-## Prerequisites
+## One-command bootstrap
 
-- `codex` already installed in `PATH`
-- `tmux` installed
-- `gotty` installed at `/usr/local/bin/gotty`
-- nginx already available if you want public access
-
-## Install
+If `codex` is already installed and logged in on the target server:
 
 ```bash
-cd /root/codex-web-terminal-lite
-chmod +x install.sh
-./install.sh
-```
-
-## Public access
-
-Add the content of [nginx.codex.conf.example](/root/codex-web-terminal-lite/nginx.codex.conf.example) into your nginx server block, then:
-
-```bash
-printf "codex:$(openssl passwd -6 'YOUR_PASSWORD')\n" > /etc/nginx/.codex-htpasswd
-nginx -t && systemctl reload nginx
+curl -fsSL https://raw.githubusercontent.com/weituo470/WEBCODEX/main/bootstrap.sh | \
+WEB_PASSWORD='ChangeThisNow123!' \
+SERVER_NAME='_' \
+bash
 ```
 
 Then open:
@@ -39,8 +27,52 @@ Then open:
 http://YOUR_HOST/codex/
 ```
 
-## How session persistence works
+Default username:
 
-- the default long-lived Codex conversation lives in `tmux` session `codex-main`
-- reconnecting to the same web entry returns to that same main session
-- extra tabs create independent `tmux` sessions named `codex-tab-*`
+```text
+codex
+```
+
+## What the installer handles
+
+- installs missing base packages: `tmux`, `nginx`, `curl`, `openssl`, `tar`
+- downloads the latest compatible `gotty` release if missing
+- writes `/usr/local/bin/codex-web-shell`
+- writes `codex-web-terminal.service`
+- writes nginx site config when `AUTO_NGINX=1`
+- writes `/etc/nginx/.codex-htpasswd`, auto-generating a password when needed
+
+## Required prerequisite
+
+`codex` itself must already be installed and authenticated on the target server.
+
+If not, run:
+
+```bash
+codex login
+```
+
+## Useful environment variables
+
+```bash
+WEB_PASSWORD='YourPassword'
+WEB_USER='codex'
+SERVER_NAME='_'
+PATH_PREFIX='/codex'
+AUTO_NGINX='1'
+PORT='8765'
+```
+
+## Manual install
+
+```bash
+git clone https://github.com/weituo470/WEBCODEX.git
+cd WEBCODEX
+chmod +x install.sh
+WEB_PASSWORD='ChangeThisNow123!' ./install.sh
+```
+
+## Session persistence
+
+- reconnecting to the same web entry returns to `codex-main`
+- extra tabs create separate `tmux` sessions named `codex-tab-*`
