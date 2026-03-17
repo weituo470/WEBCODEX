@@ -2,6 +2,8 @@
 
 The fastest reusable way to expose Codex in a browser on another Linux server.
 
+If you hand this repository URL to Codex on another server, Codex should follow the deployment instructions in [AGENTS.md](/root/codex-web-terminal-lite/AGENTS.md) and execute the install instead of only explaining it.
+
 ## What it does
 
 - runs Codex through `tmux` for persistent sessions
@@ -32,6 +34,17 @@ Default username:
 ```text
 codex
 ```
+
+## For another server's Codex
+
+If you only provide the repository URL to Codex, the expected behavior is:
+
+- check that `codex` is installed
+- if login is missing, ask you to run `codex login`
+- otherwise run this repository's installer directly
+- return the final access URL, username, password, and service status
+
+The repo-level automation instructions live in [AGENTS.md](/root/codex-web-terminal-lite/AGENTS.md).
 
 ## What the installer handles
 
