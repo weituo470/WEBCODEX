@@ -1,0 +1,1150 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="color-scheme" content="dark">
+  <title>Codex Web Terminal</title>
+  <link rel="manifest" href="./manifest.json" crossorigin="use-credentials">
+  <link rel="icon" href="./favicon.ico">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./css/index.css">
+  <link rel="stylesheet" href="./css/xterm.css">
+  <link rel="stylesheet" href="./css/xterm_customize.css">
+  <style>
+    :root {
+      --app-height: 100vh;
+      --page-bg:
+        radial-gradient(circle at top, rgba(34, 197, 94, 0.16), transparent 34%),
+        radial-gradient(circle at 85% 18%, rgba(59, 130, 246, 0.18), transparent 30%),
+        linear-gradient(180deg, #071018 0%, #09131d 45%, #060b12 100%);
+      --panel-bg: rgba(7, 15, 24, 0.9);
+      --panel-border: rgba(148, 163, 184, 0.2);
+      --text-main: #e5eef8;
+      --text-subtle: rgba(226, 232, 240, 0.72);
+      --accent: #38bdf8;
+      --accent-2: #22c55e;
+      --shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
+      --tab-height: 44px;
+    }
+
+    html, body {
+      min-height: 100%;
+      height: var(--app-height);
+      margin: 0;
+      background: var(--page-bg);
+      color: var(--text-main);
+      overflow: hidden;
+      font-family: "SFMono-Regular", "JetBrains Mono", "Fira Code", Consolas, monospace;
+    }
+
+    body.embed-mode {
+      background: transparent;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .page {
+      position: relative;
+      width: 100vw;
+      height: var(--app-height);
+      overflow: hidden;
+    }
+
+    .shell {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      width: min(1380px, calc(100vw - 32px));
+      min-width: 860px;
+      height: min(84vh, 980px);
+      min-height: 600px;
+      max-width: calc(100vw - 16px);
+      max-height: calc(100vh - 16px);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border-radius: 24px;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(16px);
+      transform: translate(-50%, -50%);
+      touch-action: none;
+    }
+
+    .shell-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 22px 14px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0.72), rgba(15, 23, 42, 0.34));
+      cursor: move;
+      user-select: none;
+    }
+
+    .shell-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .traffic {
+      display: inline-flex;
+      gap: 8px;
+      flex: 0 0 auto;
+    }
+
+    .traffic span {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      display: inline-block;
+    }
+
+    .traffic span:nth-child(1) { background: #fb7185; }
+    .traffic span:nth-child(2) { background: #f59e0b; }
+    .traffic span:nth-child(3) { background: #22c55e; }
+
+    .title-copy strong {
+      display: block;
+      font-size: 14px;
+      letter-spacing: 0.02em;
+    }
+
+    .title-copy span {
+      display: block;
+      margin-top: 3px;
+      color: var(--text-subtle);
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .shell-tools {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .shell-hints {
+      color: var(--text-subtle);
+      font-size: 12px;
+      text-align: right;
+      line-height: 1.6;
+    }
+
+    .tool-buttons {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 0 0 auto;
+    }
+
+    .tool-button {
+      appearance: none;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      background: rgba(15, 23, 42, 0.55);
+      color: var(--text-main);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font: inherit;
+      font-size: 12px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .tool-button:hover {
+      border-color: rgba(56, 189, 248, 0.55);
+      background: rgba(14, 165, 233, 0.14);
+    }
+
+    .tabs-bar {
+      display: flex;
+      align-items: stretch;
+      gap: 8px;
+      padding: 12px 14px 10px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+      background: rgba(8, 15, 24, 0.72);
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+
+    .tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 180px;
+      max-width: 280px;
+      height: var(--tab-height);
+      padding: 0 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      background: rgba(15, 23, 42, 0.55);
+      color: var(--text-subtle);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .tab.active {
+      color: var(--text-main);
+      border-color: rgba(56, 189, 248, 0.45);
+      background: linear-gradient(180deg, rgba(14, 165, 233, 0.18), rgba(34, 197, 94, 0.14));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    }
+
+    .tab-label {
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 12px;
+    }
+
+    .tab-close {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      font-size: 16px;
+      cursor: pointer;
+      padding: 0;
+      width: 18px;
+      height: 18px;
+      line-height: 18px;
+      border-radius: 999px;
+    }
+
+    .tab-close:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .tab-actions {
+      display: flex;
+      gap: 8px;
+      flex: 0 0 auto;
+    }
+
+    .terminal-wrap {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      padding: 14px;
+    }
+
+    .mobile-fold-toggle {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      z-index: 6;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(56, 189, 248, 0.28);
+      background: rgba(7, 15, 24, 0.82);
+      color: var(--text-main);
+      font: inherit;
+      font-size: 11px;
+      line-height: 1;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+      cursor: pointer;
+    }
+
+    .mobile-fold-toggle:hover {
+      border-color: rgba(56, 189, 248, 0.55);
+      background: rgba(14, 23, 42, 0.92);
+    }
+
+    .terminal-stack {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      border-radius: 18px;
+      overflow: hidden;
+      border: 1px solid rgba(56, 189, 248, 0.14);
+      background: linear-gradient(180deg, rgba(2, 6, 23, 0.92), rgba(3, 7, 18, 0.98));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+    }
+
+    .terminal-frame {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: transparent;
+      display: none;
+    }
+
+    .terminal-frame.active {
+      display: block;
+    }
+
+    .terminal-note {
+      position: absolute;
+      right: 20px;
+      bottom: 18px;
+      pointer-events: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.62);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      color: rgba(226, 232, 240, 0.68);
+      font-size: 11px;
+      letter-spacing: 0.02em;
+      backdrop-filter: blur(10px);
+      z-index: 2;
+    }
+
+    .resize-handle {
+      position: absolute;
+      pointer-events: auto;
+      z-index: 5;
+      background: transparent;
+    }
+
+    .resize-handle::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+    }
+
+    .resize-handle[data-dir="n"] {
+      top: -6px;
+      left: 14px;
+      right: 14px;
+      height: 12px;
+      cursor: ns-resize;
+    }
+
+    .resize-handle[data-dir="s"] {
+      bottom: -6px;
+      left: 14px;
+      right: 14px;
+      height: 12px;
+      cursor: ns-resize;
+    }
+
+    .resize-handle[data-dir="w"] {
+      top: 14px;
+      bottom: 14px;
+      left: -6px;
+      width: 12px;
+      cursor: ew-resize;
+    }
+
+    .resize-handle[data-dir="e"] {
+      top: 14px;
+      bottom: 14px;
+      right: -6px;
+      width: 12px;
+      cursor: ew-resize;
+    }
+
+    .resize-handle[data-dir="nw"] {
+      top: -6px;
+      left: -6px;
+      width: 18px;
+      height: 18px;
+      cursor: nwse-resize;
+    }
+
+    .resize-handle[data-dir="ne"] {
+      top: -6px;
+      right: -6px;
+      width: 18px;
+      height: 18px;
+      cursor: nesw-resize;
+    }
+
+    .resize-handle[data-dir="sw"] {
+      bottom: -6px;
+      left: -6px;
+      width: 18px;
+      height: 18px;
+      cursor: nesw-resize;
+    }
+
+    .resize-handle[data-dir="se"] {
+      bottom: -6px;
+      right: -6px;
+      width: 18px;
+      height: 18px;
+      cursor: nwse-resize;
+    }
+
+    .resize-handle[data-dir="se"]::before {
+      border-right: 2px solid rgba(56, 189, 248, 0.75);
+      border-bottom: 2px solid rgba(56, 189, 248, 0.75);
+      border-bottom-right-radius: 4px;
+    }
+
+    .resize-handle[data-dir="se"]::after {
+      content: "";
+      position: absolute;
+      right: 4px;
+      bottom: 4px;
+      width: 8px;
+      height: 8px;
+      border-right: 2px solid rgba(34, 197, 94, 0.8);
+      border-bottom: 2px solid rgba(34, 197, 94, 0.8);
+    }
+
+    .embed-root,
+    .embed-root body,
+    .embed-root #terminal {
+      background: #000;
+      width: 100%;
+      height: 100%;
+      min-height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .embed-root #terminal {
+      display: flex;
+      min-height: 0;
+    }
+
+    .embed-terminal {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      background: linear-gradient(180deg, rgba(2, 6, 23, 0.96), rgba(3, 7, 18, 1));
+      min-height: var(--app-height);
+      height: var(--app-height);
+    }
+
+    .embed-terminal .xterm {
+      height: 100%;
+      width: 100%;
+      min-height: 0;
+      padding: 12px 10px 8px;
+      box-sizing: border-box;
+    }
+
+    .embed-terminal .xterm-viewport {
+      overflow-y: auto !important;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      -webkit-overflow-scrolling: touch;
+      max-height: 100%;
+    }
+
+    .embed-terminal .xterm-screen canvas {
+      border-radius: 8px;
+    }
+
+    .embed-terminal .xterm-screen,
+    .embed-terminal .xterm-helpers,
+    .embed-terminal .terminal,
+    .embed-terminal .xterm-helper-textarea {
+      touch-action: manipulation;
+    }
+
+    @media (max-width: 980px) {
+      html, body {
+        overflow: hidden;
+      }
+
+      .page {
+        width: 100%;
+        height: var(--app-height);
+        min-height: var(--app-height);
+        overflow: hidden;
+      }
+
+      .shell {
+        position: relative;
+        inset: auto;
+        transform: none;
+        width: calc(100vw - 8px);
+        min-width: 0;
+        height: calc(var(--app-height) - 8px);
+        min-height: calc(var(--app-height) - 8px);
+        max-width: calc(100vw - 8px);
+        max-height: none;
+        margin: 4px;
+        border-radius: 16px;
+      }
+
+      .shell-header {
+        flex-direction: column;
+        align-items: flex-start;
+        cursor: default;
+        gap: 10px;
+        padding: 12px 14px 10px;
+      }
+
+      .shell-tools {
+        width: 100%;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+
+      .shell-hints {
+        text-align: left;
+        font-size: 11px;
+        line-height: 1.5;
+      }
+
+      .tabs-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding: 10px 10px 8px;
+      }
+
+      .tabs {
+        overflow-x: auto;
+      }
+
+      .tab-actions {
+        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .tool-button {
+        flex: 1;
+        min-height: 36px;
+        padding: 8px 10px;
+        font-size: 11px;
+      }
+
+      .tab {
+        min-width: 124px;
+        max-width: 220px;
+        height: 38px;
+        padding: 0 10px;
+        border-radius: 12px;
+      }
+
+      .tab-label {
+        font-size: 11px;
+      }
+
+      .terminal-wrap {
+        padding: 8px;
+      }
+
+      .terminal-stack {
+        border-radius: 14px;
+      }
+
+      .mobile-fold-toggle {
+        display: inline-flex;
+        top: 14px;
+        right: 14px;
+      }
+
+      .shell.compact-top .shell-header,
+      .shell.compact-top .tabs-bar {
+        display: none;
+      }
+
+      .shell.compact-top .terminal-wrap {
+        padding-top: 4px;
+      }
+
+      .resize-handle,
+      .terminal-note {
+        display: none;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .title-copy strong {
+        font-size: 13px;
+      }
+
+      .title-copy span {
+        font-size: 11px;
+      }
+
+      .traffic {
+        gap: 6px;
+      }
+
+      .traffic span {
+        width: 10px;
+        height: 10px;
+      }
+
+      .shell-header {
+        padding: 10px 12px 8px;
+      }
+
+      .shell-tools .tool-buttons {
+        width: 100%;
+      }
+
+      .tool-buttons {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page" id="managerRoot">
+    <section class="shell" id="shell">
+      <header class="shell-header" id="shellHeader">
+        <div class="shell-title">
+          <span class="traffic" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </span>
+          <div class="title-copy">
+            <strong>Codex Web Terminal</strong>
+            <span>支持 FinalShell 风格复制标签，同页切换多个终端视图</span>
+          </div>
+        </div>
+        <div class="shell-tools">
+          <div class="shell-hints">
+            复制标签会新增一个同服务器终端标签；任意边和角都可缩放
+          </div>
+          <div class="tool-buttons">
+            <a class="tool-button" href="/codex-system" target="_blank" rel="noreferrer">系统概览</a>
+            <a class="tool-button" href="/codex-files" target="_blank" rel="noreferrer">文件管理</a>
+            <button class="tool-button" id="centerButton" type="button">居中</button>
+            <button class="tool-button" id="fitButton" type="button">最大化</button>
+          </div>
+        </div>
+      </header>
+      <div class="tabs-bar">
+        <div class="tabs" id="tabs"></div>
+        <div class="tab-actions">
+          <button class="tool-button" id="renameTabButton" type="button">重命名标签</button>
+          <button class="tool-button" id="duplicateTabButton" type="button">复制标签</button>
+          <button class="tool-button" id="newTabButton" type="button">新建标签</button>
+        </div>
+      </div>
+      <div class="terminal-wrap">
+        <button class="mobile-fold-toggle" id="mobileToggleChromeButton" type="button">收起顶部</button>
+        <div class="terminal-stack" id="terminalStack"></div>
+        <div class="terminal-note">控制台会输出 [codex-web-terminal] 调试日志；复制标签不会新开浏览器窗口</div>
+      </div>
+      <div class="resize-handle" data-dir="n" aria-hidden="true"></div>
+      <div class="resize-handle" data-dir="s" aria-hidden="true"></div>
+      <div class="resize-handle" data-dir="w" aria-hidden="true"></div>
+      <div class="resize-handle" data-dir="e" aria-hidden="true"></div>
+      <div class="resize-handle" data-dir="nw" aria-hidden="true"></div>
+      <div class="resize-handle" data-dir="ne" aria-hidden="true"></div>
+      <div class="resize-handle" data-dir="sw" aria-hidden="true"></div>
+      <div class="resize-handle" data-dir="se" aria-hidden="true"></div>
+    </section>
+  </main>
+
+  <div class="embed-terminal hidden" id="embedRoot">
+    <div id="terminal"></div>
+  </div>
+
+  <script src="./auth_token.js"></script>
+  <script src="./config.js"></script>
+  <script>
+    (() => {
+      const debug = (...args) => console.debug("[codex-web-terminal]", ...args);
+      const params = new URLSearchParams(window.location.search);
+      const isEmbed = params.get("embed") === "1";
+      let rafId = 0;
+
+      const dispatchResize = () => {
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(() => {
+          rafId = 0;
+          window.dispatchEvent(new Event("resize"));
+        });
+      };
+
+      const updateViewportHeight = () => {
+        const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+        document.documentElement.style.setProperty("--app-height", `${Math.round(viewportHeight)}px`);
+        debug("viewport:update", {
+          viewportHeight,
+          innerHeight: window.innerHeight,
+          mobile: window.matchMedia("(max-width: 980px)").matches,
+          embed: isEmbed
+        });
+        dispatchResize();
+      };
+
+      if (isEmbed) {
+        document.body.classList.add("embed-mode");
+        document.documentElement.classList.add("embed-root");
+        document.getElementById("managerRoot").classList.add("hidden");
+        document.getElementById("embedRoot").classList.remove("hidden");
+        updateViewportHeight();
+        if (window.visualViewport) {
+          window.visualViewport.addEventListener("resize", updateViewportHeight);
+          window.visualViewport.addEventListener("scroll", updateViewportHeight);
+        }
+        window.addEventListener("resize", updateViewportHeight);
+        window.addEventListener("orientationchange", updateViewportHeight);
+        window.setTimeout(updateViewportHeight, 80);
+        window.setTimeout(updateViewportHeight, 320);
+        debug("embed-mode", Object.fromEntries(params.entries()));
+        const script = document.createElement("script");
+        script.src = "./js/gotty.js";
+        script.async = false;
+        document.body.appendChild(script);
+        return;
+      }
+
+      const shell = document.getElementById("shell");
+      const shellHeader = document.getElementById("shellHeader");
+      const tabsEl = document.getElementById("tabs");
+      const terminalStack = document.getElementById("terminalStack");
+      const centerButton = document.getElementById("centerButton");
+      const fitButton = document.getElementById("fitButton");
+      const renameTabButton = document.getElementById("renameTabButton");
+      const duplicateTabButton = document.getElementById("duplicateTabButton");
+      const newTabButton = document.getElementById("newTabButton");
+      const mobileToggleChromeButton = document.getElementById("mobileToggleChromeButton");
+      const resizeHandles = Array.from(document.querySelectorAll(".resize-handle"));
+      const mobileMedia = window.matchMedia("(max-width: 980px)");
+      const layoutKey = "codex-web-terminal-layout-v3";
+      const tabsKey = "codex-web-terminal-tabs-v3";
+      const mobileChromeKey = "codex-web-terminal-mobile-top-v1";
+
+      let dragState = null;
+      let resizeState = null;
+      let activeTabId = null;
+      let tabs = [];
+
+      const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+      const desktopBounds = () => ({ width: window.innerWidth, height: window.innerHeight });
+      const baseUrl = () => `${window.location.origin}${window.location.pathname}`;
+      const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const createPrimaryTab = () => ({
+        id: "main",
+        title: "主终端",
+        session: "codex-main"
+      });
+      const readMobileChromeState = () => localStorage.getItem(mobileChromeKey) === "collapsed";
+      const writeMobileChromeState = (collapsed) => localStorage.setItem(mobileChromeKey, collapsed ? "collapsed" : "expanded");
+
+      const applyMobileChromeState = (collapsed) => {
+        const nextCollapsed = Boolean(collapsed && mobileMedia.matches);
+        shell.classList.toggle("compact-top", nextCollapsed);
+        if (mobileToggleChromeButton) {
+          mobileToggleChromeButton.textContent = nextCollapsed ? "展开顶部" : "收起顶部";
+          mobileToggleChromeButton.setAttribute("aria-pressed", nextCollapsed ? "true" : "false");
+        }
+        debug("mobile:chrome", { collapsed: nextCollapsed, mobile: mobileMedia.matches });
+        dispatchResize();
+      };
+
+      const syncMobileChromeState = () => {
+        applyMobileChromeState(readMobileChromeState());
+      };
+
+      const defaultLayout = () => {
+        const bounds = desktopBounds();
+        const width = Math.min(1380, bounds.width - 32);
+        const height = Math.min(Math.max(620, Math.round(bounds.height * 0.84)), bounds.height - 32);
+        return {
+          width,
+          height,
+          left: Math.round((bounds.width - width) / 2),
+          top: Math.round((bounds.height - height) / 2)
+        };
+      };
+
+      const saveLayout = () => {
+        if (mobileMedia.matches) return;
+        const rect = shell.getBoundingClientRect();
+        const next = {
+          left: Math.round(rect.left),
+          top: Math.round(rect.top),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height)
+        };
+        debug("saveLayout", next);
+        localStorage.setItem(layoutKey, JSON.stringify(next));
+      };
+
+      const applyLayout = (layout) => {
+        if (mobileMedia.matches) {
+          shell.style.left = "";
+          shell.style.top = "";
+          shell.style.width = "";
+          shell.style.height = "";
+          shell.style.transform = "";
+          dispatchResize();
+          return;
+        }
+
+        const bounds = desktopBounds();
+        const minWidth = 860;
+        const minHeight = 600;
+        const width = clamp(layout.width, minWidth, bounds.width - 16);
+        const height = clamp(layout.height, minHeight, bounds.height - 16);
+        const left = clamp(layout.left, 8, bounds.width - width - 8);
+        const top = clamp(layout.top, 8, bounds.height - height - 8);
+
+        shell.style.transform = "none";
+        shell.style.left = `${left}px`;
+        shell.style.top = `${top}px`;
+        shell.style.width = `${width}px`;
+        shell.style.height = `${height}px`;
+        debug("applyLayout", { left, top, width, height });
+        dispatchResize();
+      };
+
+      const loadLayout = () => {
+        updateViewportHeight();
+        syncMobileChromeState();
+        if (mobileMedia.matches) {
+          applyLayout(defaultLayout());
+          return;
+        }
+
+        try {
+          const raw = localStorage.getItem(layoutKey);
+          applyLayout(raw ? JSON.parse(raw) : defaultLayout());
+        } catch (_error) {
+          applyLayout(defaultLayout());
+        }
+      };
+
+      const saveTabs = () => {
+        localStorage.setItem(tabsKey, JSON.stringify({ tabs, activeTabId }));
+      };
+
+      const createSessionName = (tabId) => `codex-tab-${tabId}`.slice(0, 48);
+
+      const createTabModel = (index, overrides = {}) => {
+        if ((index === 1 && !overrides.session && !overrides.id && !overrides.title) || overrides.session === "codex-main") {
+          return {
+            ...createPrimaryTab(),
+            ...overrides
+          };
+        }
+        const id = overrides.id || makeId();
+        return {
+          id,
+          title: overrides.title || `终端 ${index}`,
+          session: overrides.session || createSessionName(id)
+        };
+      };
+
+      const ensureUniqueSessions = (items) => {
+        const seen = new Set();
+        return items.map((tab, index) => {
+          let session = tab.session || createSessionName(tab.id || makeId());
+          if (seen.has(session)) {
+            session = createSessionName(`${tab.id || makeId()}-${index}`);
+          }
+          seen.add(session);
+          return {
+            ...tab,
+            session
+          };
+        });
+      };
+
+      const restoreTabsFromServer = async () => {
+        try {
+          const response = await fetch("/api/v1/codex/sessions", {
+            credentials: "include",
+            cache: "no-store"
+          });
+          if (!response.ok) {
+            return null;
+          }
+          const items = await response.json();
+          if (!Array.isArray(items) || !items.length) {
+            return null;
+          }
+          return ensureUniqueSessions(items.map((item, index) => createTabModel(index + 1, {
+            id: item.session === "codex-main" ? "main" : item.session,
+            title: item.title,
+            session: item.session
+          })));
+        } catch (_error) {
+          return null;
+        }
+      };
+
+      const loadTabs = async () => {
+        try {
+          const raw = localStorage.getItem(tabsKey);
+          if (!raw) {
+            const serverTabs = await restoreTabsFromServer();
+            tabs = serverTabs && serverTabs.length ? serverTabs : [createPrimaryTab()];
+            activeTabId = tabs[0].id;
+            return;
+          }
+          const parsed = JSON.parse(raw);
+          tabs = Array.isArray(parsed.tabs) && parsed.tabs.length
+            ? ensureUniqueSessions(parsed.tabs.map((tab, index) => createTabModel(index + 1, tab)))
+            : (await restoreTabsFromServer()) || [createPrimaryTab()];
+          activeTabId = parsed.activeTabId && tabs.some((tab) => tab.id === parsed.activeTabId)
+            ? parsed.activeTabId
+            : tabs[0].id;
+        } catch (_error) {
+          const serverTabs = await restoreTabsFromServer();
+          tabs = serverTabs && serverTabs.length ? serverTabs : [createPrimaryTab()];
+          activeTabId = tabs[0].id;
+        }
+      };
+
+      const frameSrc = (tab) =>
+        `${baseUrl()}?embed=1&tab=${encodeURIComponent(tab.id)}&arg=${encodeURIComponent(tab.session)}`;
+
+      const renameTab = (tabId) => {
+        const tab = tabs.find((item) => item.id === tabId);
+        if (!tab) return;
+        const nextTitle = window.prompt("输入新的标签名称", tab.title);
+        if (nextTitle === null) return;
+        const trimmed = nextTitle.trim();
+        if (!trimmed) return;
+        tab.title = trimmed.slice(0, 40);
+        debug("tab:rename", { id: tab.id, title: tab.title });
+        renderTabs();
+        saveTabs();
+      };
+
+      const renderTabs = () => {
+        tabsEl.innerHTML = "";
+        terminalStack.querySelectorAll(".terminal-frame").forEach((frame) => frame.remove());
+
+        tabs.forEach((tab) => {
+          const tabEl = document.createElement("div");
+          tabEl.className = `tab${tab.id === activeTabId ? " active" : ""}`;
+          tabEl.dataset.tabId = tab.id;
+          tabEl.innerHTML = `
+            <span class="tab-label">${tab.title}</span>
+            <button class="tab-close" type="button" aria-label="关闭标签">×</button>
+          `;
+          tabsEl.appendChild(tabEl);
+
+          const iframe = document.createElement("iframe");
+          iframe.className = `terminal-frame${tab.id === activeTabId ? " active" : ""}`;
+          iframe.dataset.tabId = tab.id;
+          iframe.src = frameSrc(tab);
+          iframe.title = tab.title;
+          terminalStack.appendChild(iframe);
+
+          tabEl.addEventListener("click", (event) => {
+            if (event.target.closest(".tab-close")) return;
+            activeTabId = tab.id;
+            debug("tab:activate", tab.id);
+            renderTabs();
+            saveTabs();
+          });
+
+          tabEl.addEventListener("dblclick", (event) => {
+            if (event.target.closest(".tab-close")) return;
+            renameTab(tab.id);
+          });
+
+          tabEl.querySelector(".tab-close").addEventListener("click", (event) => {
+            event.stopPropagation();
+            if (tabs.length === 1) return;
+            tabs = tabs.filter((item) => item.id !== tab.id);
+            if (activeTabId === tab.id) {
+              activeTabId = tabs[0].id;
+            }
+            debug("tab:close", tab.id);
+            renderTabs();
+            saveTabs();
+          });
+        });
+      };
+
+      const addTab = (mode) => {
+        const nextIndex = tabs.length + 1;
+        const activeTab = tabs.find((tab) => tab.id === activeTabId);
+        const tab = createTabModel(nextIndex, {
+          title: mode === "duplicate" && activeTab ? `${activeTab.title} 副本` : undefined
+        });
+        tabs.push(tab);
+        activeTabId = tab.id;
+        debug(mode === "duplicate" ? "tab:duplicate" : "tab:new", {
+          id: tab.id,
+          session: tab.session
+        });
+        renderTabs();
+        saveTabs();
+      };
+
+      const currentRect = () => shell.getBoundingClientRect();
+
+      const centerLayout = () => {
+        debug("centerLayout");
+        localStorage.removeItem(layoutKey);
+        applyLayout(defaultLayout());
+      };
+
+      const fitLayout = () => {
+        if (mobileMedia.matches) return;
+        debug("fitLayout");
+        applyLayout({
+          left: 8,
+          top: 8,
+          width: window.innerWidth - 16,
+          height: window.innerHeight - 16
+        });
+        saveLayout();
+      };
+
+      shellHeader.addEventListener("pointerdown", (event) => {
+        if (mobileMedia.matches || event.target.closest("button")) return;
+        dragState = {
+          startX: event.clientX,
+          startY: event.clientY,
+          rect: currentRect()
+        };
+        debug("drag:start", dragState);
+        event.preventDefault();
+      });
+
+      const endDrag = () => {
+        if (!dragState) return;
+        debug("drag:end");
+        dragState = null;
+        saveLayout();
+      };
+
+      const updateResize = (event) => {
+        if (!resizeState) return;
+        const dx = event.clientX - resizeState.startX;
+        const dy = event.clientY - resizeState.startY;
+        const rect = resizeState.rect;
+        let nextLeft = rect.left;
+        let nextTop = rect.top;
+        let nextWidth = rect.width;
+        let nextHeight = rect.height;
+
+        if (resizeState.dir.includes("e")) nextWidth = rect.width + dx;
+        if (resizeState.dir.includes("s")) nextHeight = rect.height + dy;
+        if (resizeState.dir.includes("w")) {
+          nextWidth = rect.width - dx;
+          nextLeft = rect.left + dx;
+        }
+        if (resizeState.dir.includes("n")) {
+          nextHeight = rect.height - dy;
+          nextTop = rect.top + dy;
+        }
+
+        applyLayout({
+          left: nextLeft,
+          top: nextTop,
+          width: nextWidth,
+          height: nextHeight
+        });
+      };
+
+      const endResize = () => {
+        if (!resizeState) return;
+        debug("resize:end", resizeState.dir);
+        resizeState = null;
+        saveLayout();
+      };
+
+      resizeHandles.forEach((handle) => {
+        handle.addEventListener("pointerdown", (event) => {
+          if (mobileMedia.matches) return;
+          resizeState = {
+            dir: handle.dataset.dir || "se",
+            startX: event.clientX,
+            startY: event.clientY,
+            rect: currentRect()
+          };
+          debug("resize:start", resizeState.dir, resizeState);
+          event.preventDefault();
+          event.stopPropagation();
+        });
+      });
+
+      document.addEventListener("pointermove", (event) => {
+        if (dragState && !mobileMedia.matches) {
+          applyLayout({
+            left: dragState.rect.left + (event.clientX - dragState.startX),
+            top: dragState.rect.top + (event.clientY - dragState.startY),
+            width: dragState.rect.width,
+            height: dragState.rect.height
+          });
+          return;
+        }
+        if (resizeState && !mobileMedia.matches) {
+          updateResize(event);
+        }
+      });
+
+      document.addEventListener("pointerup", () => {
+        endDrag();
+        endResize();
+      });
+
+      document.addEventListener("pointercancel", () => {
+        endDrag();
+        endResize();
+      });
+
+      centerButton.addEventListener("click", centerLayout);
+      fitButton.addEventListener("click", fitLayout);
+      renameTabButton.addEventListener("click", () => {
+        if (!activeTabId) return;
+        renameTab(activeTabId);
+      });
+      duplicateTabButton.addEventListener("click", () => addTab("duplicate"));
+      newTabButton.addEventListener("click", () => addTab("new"));
+      mobileToggleChromeButton.addEventListener("click", () => {
+        const nextCollapsed = !shell.classList.contains("compact-top");
+        writeMobileChromeState(nextCollapsed);
+        applyMobileChromeState(nextCollapsed);
+      });
+      shellHeader.addEventListener("dblclick", centerLayout);
+      window.addEventListener("resize", loadLayout);
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", loadLayout);
+        window.visualViewport.addEventListener("scroll", loadLayout);
+      }
+      window.addEventListener("orientationchange", loadLayout);
+      window.addEventListener("load", () => {
+        updateViewportHeight();
+        debug("window:load", {
+          innerWidth: window.innerWidth,
+          innerHeight: window.innerHeight,
+          mobile: mobileMedia.matches
+        });
+      });
+
+      new ResizeObserver(() => dispatchResize()).observe(shell);
+      updateViewportHeight();
+      syncMobileChromeState();
+      loadTabs().then(() => {
+        renderTabs();
+        loadLayout();
+        saveTabs();
+      });
+    })();
+  </script>
+</body>
+</html>
