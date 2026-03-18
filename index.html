@@ -5,12 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="color-scheme" content="dark">
   <title>Codex Web Terminal</title>
-  <link rel="manifest" href="./manifest.json" crossorigin="use-credentials">
-  <link rel="icon" href="./favicon.ico">
-  <link rel="icon" href="./icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./css/index.css">
-  <link rel="stylesheet" href="./css/xterm.css">
-  <link rel="stylesheet" href="./css/xterm_customize.css">
   <style>
     :root {
       --app-height: 100vh;
@@ -246,6 +240,7 @@
       flex: 1;
       min-height: 0;
       padding: 14px;
+      display: flex;
     }
 
     .mobile-fold-toggle {
@@ -276,8 +271,9 @@
 
     .terminal-stack {
       position: relative;
+      flex: 1 1 auto;
       width: 100%;
-      height: 100%;
+      min-height: 0;
       border-radius: 18px;
       overflow: hidden;
       border: 1px solid rgba(56, 189, 248, 0.14);
@@ -646,7 +642,7 @@
       <div class="terminal-wrap">
         <button class="mobile-fold-toggle" id="mobileToggleChromeButton" type="button">收起顶部</button>
         <div class="terminal-stack" id="terminalStack"></div>
-        <div class="terminal-note">复制标签会新建独立会话；如需调试日志，请在地址后加 `?debug=1`</div>
+        <div class="terminal-note">控制台会输出 [codex-web-terminal] 调试日志；复制标签不会新开浏览器窗口</div>
       </div>
       <div class="resize-handle" data-dir="n" aria-hidden="true"></div>
       <div class="resize-handle" data-dir="s" aria-hidden="true"></div>
@@ -663,42 +659,32 @@
     <div id="terminal"></div>
   </div>
 
-  <script src="./auth_token.js"></script>
-  <script src="./config.js"></script>
   <script>
     (() => {
       const params = new URLSearchParams(window.location.search);
-      const debugEnabled = params.get("debug") === "1" || localStorage.getItem("codex-web-terminal-debug") === "1";
+      const debugEnabled = params.get("debug") === "1" || window.localStorage.getItem("codex-web-terminal-debug") === "1";
       const debug = (...args) => {
-        if (!debugEnabled) return;
-        console.debug("[codex-web-terminal]", ...args);
+        if (debugEnabled) console.debug("[codex-web-terminal]", ...args);
       };
       const isEmbed = params.get("embed") === "1";
       let rafId = 0;
-      let dispatchingSyntheticResize = false;
 
       const dispatchResize = () => {
         if (rafId) cancelAnimationFrame(rafId);
         rafId = requestAnimationFrame(() => {
           rafId = 0;
-          dispatchingSyntheticResize = true;
-          try {
-            window.dispatchEvent(new Event("resize"));
-          } finally {
-            dispatchingSyntheticResize = false;
-          }
+          document.querySelectorAll(".terminal-frame").forEach((frame) => {
+            try {
+              if (frame.contentWindow) frame.contentWindow.dispatchEvent(new Event("resize"));
+            } catch (_error) {
+            }
+          });
         });
       };
 
       const updateViewportHeight = () => {
         const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
         document.documentElement.style.setProperty("--app-height", `${Math.round(viewportHeight)}px`);
-        debug("viewport:update", {
-          viewportHeight,
-          innerHeight: window.innerHeight,
-          mobile: window.matchMedia("(max-width: 980px)").matches,
-          embed: isEmbed
-        });
         dispatchResize();
       };
 
@@ -712,10 +698,7 @@
           window.visualViewport.addEventListener("resize", updateViewportHeight);
           window.visualViewport.addEventListener("scroll", updateViewportHeight);
         }
-        window.addEventListener("resize", () => {
-          if (dispatchingSyntheticResize) return;
-          updateViewportHeight();
-        });
+        window.addEventListener("resize", updateViewportHeight);
         window.addEventListener("orientationchange", updateViewportHeight);
         window.setTimeout(updateViewportHeight, 80);
         window.setTimeout(updateViewportHeight, 320);
@@ -927,7 +910,7 @@
       };
 
       const frameSrc = (tab) =>
-        `${baseUrl()}?embed=1&tab=${encodeURIComponent(tab.id)}&arg=${encodeURIComponent(tab.session)}`;
+        `${window.location.origin}/codex-terminal/?arg=${encodeURIComponent(tab.session)}`;
 
       const renameTab = (tabId) => {
         const tab = tabs.find((item) => item.id === tabId);
@@ -1134,10 +1117,7 @@
         applyMobileChromeState(nextCollapsed);
       });
       shellHeader.addEventListener("dblclick", centerLayout);
-      window.addEventListener("resize", () => {
-        if (dispatchingSyntheticResize) return;
-        loadLayout();
-      });
+      window.addEventListener("resize", loadLayout);
       if (window.visualViewport) {
         window.visualViewport.addEventListener("resize", loadLayout);
         window.visualViewport.addEventListener("scroll", loadLayout);

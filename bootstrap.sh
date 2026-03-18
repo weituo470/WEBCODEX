@@ -1,30 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_URL="${REPO_URL:-https://github.com/weituo470/WEBCODEX.git}"
-TARGET_DIR="${TARGET_DIR:-/opt/WEBCODEX}"
+tmpdir="$(mktemp -d)"
+cleanup() {
+  rm -rf "$tmpdir"
+}
+trap cleanup EXIT
 
-if [[ "${EUID}" -ne 0 ]]; then
-  echo "please run as root"
+archive_url="https://github.com/weituo470/WEBCODEX/archive/refs/heads/main.tar.gz"
+curl -fsSL "$archive_url" -o "$tmpdir/webcodex.tgz"
+tar -xzf "$tmpdir/webcodex.tgz" -C "$tmpdir"
+
+src_dir="$(find "$tmpdir" -maxdepth 1 -type d -name 'WEBCODEX-*' | head -n 1)"
+if [[ -z "$src_dir" ]]; then
+  echo "failed to unpack WEBCODEX source"
   exit 1
 fi
 
-if ! command -v git >/dev/null 2>&1; then
-  if command -v apt-get >/dev/null 2>&1; then
-    apt-get update
-    DEBIAN_FRONTEND=noninteractive apt-get install -y git
-  elif command -v dnf >/dev/null 2>&1; then
-    dnf install -y git
-  elif command -v yum >/dev/null 2>&1; then
-    yum install -y git
-  else
-    echo "git is required"
-    exit 1
-  fi
-fi
-
-rm -rf "$TARGET_DIR"
-git clone "$REPO_URL" "$TARGET_DIR"
-cd "$TARGET_DIR"
-chmod +x install.sh
-./install.sh
+chmod +x "$src_dir/install.sh"
+exec "$src_dir/install.sh"
