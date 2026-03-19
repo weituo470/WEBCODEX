@@ -642,7 +642,7 @@
       <div class="terminal-wrap">
         <button class="mobile-fold-toggle" id="mobileToggleChromeButton" type="button">收起顶部</button>
         <div class="terminal-stack" id="terminalStack"></div>
-        <div class="terminal-note">控制台会输出 [codex-web-terminal] 调试日志；复制标签不会新开浏览器窗口</div>
+        <div class="terminal-note">主标签固定为同一条长期对话且不可关闭；如需调试日志，请在地址后加 `?debug=1`</div>
       </div>
       <div class="resize-handle" data-dir="n" aria-hidden="true"></div>
       <div class="resize-handle" data-dir="s" aria-hidden="true"></div>
@@ -740,6 +740,7 @@
         title: "主终端",
         session: "codex-main"
       });
+      const isPrimaryTab = (tab) => tab && tab.session === "codex-main";
       const readMobileChromeState = () => localStorage.getItem(mobileChromeKey) === "collapsed";
       const writeMobileChromeState = (collapsed) => localStorage.setItem(mobileChromeKey, collapsed ? "collapsed" : "expanded");
 
@@ -832,6 +833,18 @@
       };
 
       const createSessionName = (tabId) => `codex-tab-${tabId}`.slice(0, 48);
+      const nextTerminalNumber = () => {
+        const used = new Set(
+          tabs
+            .map((tab) => /^终端\s+(\d+)$/.exec((tab.title || "").trim()))
+            .filter(Boolean)
+            .map((match) => Number(match[1]))
+            .filter(Number.isFinite)
+        );
+        let next = 1;
+        while (used.has(next)) next += 1;
+        return next;
+      };
 
       const createTabModel = (index, overrides = {}) => {
         if ((index === 1 && !overrides.session && !overrides.id && !overrides.title) || overrides.session === "codex-main") {
@@ -863,6 +876,13 @@
         });
       };
 
+      const normalizeTabs = (items) => {
+        const normalized = ensureUniqueSessions(items.map((tab, index) => createTabModel(index + 1, tab)));
+        const primary = normalized.find(isPrimaryTab) || createPrimaryTab();
+        const rest = normalized.filter((tab) => !isPrimaryTab(tab));
+        return [primary, ...rest];
+      };
+
       const restoreTabsFromServer = async () => {
         try {
           const response = await fetch("/api/v1/codex/sessions", {
@@ -876,7 +896,7 @@
           if (!Array.isArray(items) || !items.length) {
             return null;
           }
-          return ensureUniqueSessions(items.map((item, index) => createTabModel(index + 1, {
+          return normalizeTabs(items.map((item, index) => createTabModel(index + 1, {
             id: item.session === "codex-main" ? "main" : item.session,
             title: item.title,
             session: item.session
@@ -891,20 +911,20 @@
           const raw = localStorage.getItem(tabsKey);
           if (!raw) {
             const serverTabs = await restoreTabsFromServer();
-            tabs = serverTabs && serverTabs.length ? serverTabs : [createPrimaryTab()];
+            tabs = serverTabs && serverTabs.length ? serverTabs : normalizeTabs([createPrimaryTab()]);
             activeTabId = tabs[0].id;
             return;
           }
           const parsed = JSON.parse(raw);
           tabs = Array.isArray(parsed.tabs) && parsed.tabs.length
-            ? ensureUniqueSessions(parsed.tabs.map((tab, index) => createTabModel(index + 1, tab)))
-            : (await restoreTabsFromServer()) || [createPrimaryTab()];
+            ? normalizeTabs(parsed.tabs)
+            : (await restoreTabsFromServer()) || normalizeTabs([createPrimaryTab()]);
           activeTabId = parsed.activeTabId && tabs.some((tab) => tab.id === parsed.activeTabId)
             ? parsed.activeTabId
             : tabs[0].id;
         } catch (_error) {
           const serverTabs = await restoreTabsFromServer();
-          tabs = serverTabs && serverTabs.length ? serverTabs : [createPrimaryTab()];
+          tabs = serverTabs && serverTabs.length ? serverTabs : normalizeTabs([createPrimaryTab()]);
           activeTabId = tabs[0].id;
         }
       };
@@ -930,12 +950,13 @@
         terminalStack.querySelectorAll(".terminal-frame").forEach((frame) => frame.remove());
 
         tabs.forEach((tab) => {
+          const primary = isPrimaryTab(tab);
           const tabEl = document.createElement("div");
           tabEl.className = `tab${tab.id === activeTabId ? " active" : ""}`;
           tabEl.dataset.tabId = tab.id;
           tabEl.innerHTML = `
             <span class="tab-label">${tab.title}</span>
-            <button class="tab-close" type="button" aria-label="关闭标签">×</button>
+            <button class="tab-close${primary ? " hidden" : ""}" type="button" aria-label="关闭标签"${primary ? ' tabindex="-1"' : ""}>×</button>
           `;
           tabsEl.appendChild(tabEl);
 
@@ -961,7 +982,7 @@
 
           tabEl.querySelector(".tab-close").addEventListener("click", (event) => {
             event.stopPropagation();
-            if (tabs.length === 1) return;
+            if (primary || tabs.length === 1) return;
             tabs = tabs.filter((item) => item.id !== tab.id);
             if (activeTabId === tab.id) {
               activeTabId = tabs[0].id;
@@ -974,10 +995,12 @@
       };
 
       const addTab = (mode) => {
-        const nextIndex = tabs.length + 1;
         const activeTab = tabs.find((tab) => tab.id === activeTabId);
+        const nextIndex = nextTerminalNumber();
         const tab = createTabModel(nextIndex, {
-          title: mode === "duplicate" && activeTab ? `${activeTab.title} 副本` : undefined
+          title: mode === "duplicate" && activeTab
+            ? `${activeTab.title} 副本`
+            : `终端 ${nextIndex}`
         });
         tabs.push(tab);
         activeTabId = tab.id;
