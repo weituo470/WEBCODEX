@@ -2,17 +2,18 @@
 
 把 Codex 稳定地暴露成网页终端的一套可复用部署基线。
 
-这次仓库已经从早期 `gotty` 方案切到最终稳定版架构：
+当前仓库采用稳定版架构：
 
 - `tmux` 负责持久会话，主会话固定为 `codex-main`
 - `ttyd + xterm` 负责真实终端渲染，解决中文输入问题
-- 自定义登录 helper 负责表单登录、会话 cookie、会话列表、系统页、文件页
+- 自定义 helper 负责网页登录、cookie 会话、会话列表、系统页、文件页
 - 外层是多标签 Web UI，支持复制标签、重命名、移动端适配
-- `nginx auth_request` 负责统一鉴权，不再在配置里硬编码 cookie 正则
+- `nginx auth_request` 负责统一鉴权
+- 可通过 `CODEX_MAIN_RESUME_ID` 把默认主标签固定到指定 `codex resume <conversation_id>`
 
-## 最终稳定架构
+## 公开入口
 
-- 公开入口: `/codex/`
+- 主入口: `/codex/`
 - 登录页: `/codex-login`
 - 内嵌终端: `/codex-terminal/`
 - 会话接口: `/api/v1/codex/sessions`
@@ -29,6 +30,16 @@
 curl -fsSL https://raw.githubusercontent.com/weituo470/WEBCODEX/main/bootstrap.sh | \
 WEB_PASSWORD='ReplaceThisNow123!' \
 SERVER_NAME='_' \
+bash
+```
+
+如果要把默认主标签固定到某个指定对话：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/weituo470/WEBCODEX/main/bootstrap.sh | \
+WEB_PASSWORD='ReplaceThisNow123!' \
+SERVER_NAME='_' \
+CODEX_MAIN_RESUME_ID='019cdbeb-e315-7ad0-8af6-a871ac6eeb26' \
 bash
 ```
 
@@ -53,22 +64,24 @@ chmod +x install.sh
 WEB_PASSWORD='ReplaceThisNow123!' SERVER_NAME='_' ./install.sh
 ```
 
+如果要固定主对话：
+
+```bash
+WEB_PASSWORD='ReplaceThisNow123!' \
+SERVER_NAME='_' \
+CODEX_MAIN_RESUME_ID='019cdbeb-e315-7ad0-8af6-a871ac6eeb26' \
+./install.sh
+```
+
 ## 安装器做的事
 
 - 安装依赖: `tmux`、`nginx`、`curl`、`openssl`、`tar`、`python3`、`ttyd`
 - 写入 `codex-main-bootstrap`、`codex-web-shell`、`codex-web-terminal`
-- 写入 `codex-web-helper` 和会话环境文件
+- 写入 `codex-web-helper`、helper 环境文件、主会话配置文件
 - 写入 `codex-main.service`、`codex-web-helper.service`、`codex-web-terminal.service`
 - 写入 nginx 站点配置
 - 部署当前稳定版多标签 UI
 - 自动停掉旧的 `codex-gotty.service`、`codex-ws-bridge.service`
-
-## 关键设计
-
-- 不再使用 Basic Auth 作为主登录方案
-- 不再依赖 `gotty/hterm` 作为主终端渲染
-- 不再通过 nginx 解析 cookie 正则做登录判断
-- 会话恢复和多标签切换都围绕 `tmux` 会话名实现
 
 ## 环境变量
 
@@ -83,11 +96,13 @@ UI_DIR='/opt/codex-web-ui'
 CODEX_MAIN_RESUME_ID='019cdbeb-e315-7ad0-8af6-a871ac6eeb26'
 ```
 
-## 排障和复盘
+## 关键设计
 
-这次真实修复过程、踩坑点和为什么这样改，见：
-
-- [DEPLOYMENT_NOTES.md](DEPLOYMENT_NOTES.md)
+- 不再使用 Basic Auth 作为主登录方案
+- 不再依赖 `gotty/hterm` 作为主终端渲染
+- 不再通过 nginx 解析 cookie 正则做登录判断
+- 会话恢复和多标签切换都围绕 `tmux` 会话名实现
+- 如果设置 `CODEX_MAIN_RESUME_ID`，主标签在首次启动和异常退出后重启时都会恢复到该对话
 
 ## 备注
 

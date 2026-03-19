@@ -11,7 +11,8 @@
 1. 先检查 `codex` 是否存在：`command -v codex`
 2. 再确认 `codex` 已可用；如果用户还没登录，要求用户先执行 `codex login`
 3. 以 `root` 运行本仓库的 `install.sh` 或 `bootstrap.sh`
-4. 安装完成后返回：
+4. 如果用户提供了特定对话 ID，必须把它作为 `CODEX_MAIN_RESUME_ID` 传入，让默认主标签固定恢复该对话
+5. 安装完成后返回：
    - 公网访问 URL
    - 登录账号
    - 登录密码
@@ -25,7 +26,7 @@
 
 ```bash
 chmod +x install.sh
-WEB_PASSWORD="${WEB_PASSWORD:-}" SERVER_NAME="${SERVER_NAME:-_}" ./install.sh
+WEB_PASSWORD="${WEB_PASSWORD:-}" SERVER_NAME="${SERVER_NAME:-_}" CODEX_MAIN_RESUME_ID="${CODEX_MAIN_RESUME_ID:-}" ./install.sh
 ```
 
 如果用户只给了仓库 URL：
@@ -38,6 +39,12 @@ curl -fsSL https://raw.githubusercontent.com/weituo470/WEBCODEX/main/bootstrap.s
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/weituo470/WEBCODEX/main/bootstrap.sh | WEB_PASSWORD='ReplaceThisNow123!' SERVER_NAME='_' bash
+```
+
+如果用户还明确给了固定对话 ID：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/weituo470/WEBCODEX/main/bootstrap.sh | WEB_PASSWORD='ReplaceThisNow123!' SERVER_NAME='_' CODEX_MAIN_RESUME_ID='019cef2a-d869-7e40-b268-22c4bafcb3f9' bash
 ```
 
 ## 当前稳定架构
@@ -60,4 +67,5 @@ curl -fsSL https://raw.githubusercontent.com/weituo470/WEBCODEX/main/bootstrap.s
 
 - 默认登录账号是 `codex`
 - 主 tmux 会话必须是 `codex-main`
+- `CODEX_MAIN_RESUME_ID` 可以把 `codex-main` 固定到指定对话
 - 当前仓库已经包含稳定版 UI 和安装器
