@@ -22,6 +22,7 @@ MAIN_SERVICE_FILE="/etc/systemd/system/${MAIN_SERVICE_NAME}.service"
 HELPER_SERVICE_FILE="/etc/systemd/system/${HELPER_SERVICE_NAME}.service"
 TERMINAL_SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 CODEX_BIN="${CODEX_BIN:-$(command -v codex || true)}"
+CODEX_MAIN_RESUME_ID="${CODEX_MAIN_RESUME_ID:-019cdbeb-e315-7ad0-8af6-a871ac6eeb26}"
 CODEX_BIN_DIR=""
 SESSION_SECRET=""
 COOKIE_NAME=""
@@ -129,6 +130,7 @@ set -euo pipefail
 export HOME=$WORKDIR
 export TERM="\${TERM:-xterm-256color}"
 export PATH="$CODEX_BIN_DIR:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:$WORKDIR/bin:\${PATH:-}"
+CODEX_MAIN_RESUME_ID="${CODEX_MAIN_RESUME_ID:-$CODEX_MAIN_RESUME_ID}"
 
 session_name="\${1:-codex-main}"
 session_name="\$(printf '%s' "\$session_name" | tr -cd '[:alnum:]-_' | cut -c1-48)"
@@ -139,6 +141,10 @@ if /usr/bin/tmux has-session -t "\$session_name" 2>/dev/null; then
 fi
 
 cd $WORKDIR
+if [[ "\$session_name" == "codex-main" ]]; then
+  exec /usr/bin/tmux new-session -d -s "\$session_name" -c $WORKDIR "/bin/bash -lc 'export PATH=$CODEX_BIN_DIR:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:$WORKDIR/bin:\$PATH; exec codex resume \$CODEX_MAIN_RESUME_ID'"
+fi
+
 exec /usr/bin/tmux new-session -d -s "\$session_name" -c $WORKDIR '/bin/bash -lc "export PATH=$CODEX_BIN_DIR:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:$WORKDIR/bin:\$PATH; exec codex"'
 EOF
   chmod 0755 "$MAIN_BOOTSTRAP_PATH"

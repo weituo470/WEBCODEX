@@ -80,6 +80,7 @@ WORKDIR='/root'
 TERMINAL_PORT='8765'
 HELPER_PORT='8780'
 UI_DIR='/opt/codex-web-ui'
+CODEX_MAIN_RESUME_ID='019cdbeb-e315-7ad0-8af6-a871ac6eeb26'
 ```
 
 ## 排障和复盘
