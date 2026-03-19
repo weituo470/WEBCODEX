@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="color-scheme" content="dark">
   <title>Codex Web Terminal</title>
+  <link rel="manifest" href="./manifest.json" crossorigin="use-credentials">
+  <link rel="icon" href="./favicon.ico">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./css/index.css">
+  <link rel="stylesheet" href="./css/xterm.css">
+  <link rel="stylesheet" href="./css/xterm_customize.css">
   <style>
     :root {
       --app-height: 100vh;
@@ -247,6 +253,8 @@
       min-height: 0;
       padding: 14px;
       display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
 
     .mobile-fold-toggle {
@@ -277,9 +285,9 @@
 
     .terminal-stack {
       position: relative;
-      flex: 1 1 auto;
       width: 100%;
-      min-height: 0;
+      flex: 1 1 auto;
+      min-height: 180px;
       border-radius: 18px;
       overflow: hidden;
       border: 1px solid rgba(56, 189, 248, 0.14);
@@ -340,6 +348,118 @@
     .copy-toast.show {
       opacity: 1;
       transform: translateY(0);
+    }
+
+    .dialog-panel {
+      position: relative;
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 162px;
+      border-radius: 18px;
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      background: linear-gradient(180deg, rgba(9, 16, 28, 0.96), rgba(7, 12, 20, 0.98));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+      overflow: hidden;
+    }
+
+    .dialog-panel.collapsed {
+      min-height: 0;
+    }
+
+    .dialog-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px 10px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+      background: rgba(15, 23, 42, 0.52);
+    }
+
+    .dialog-panel-title {
+      min-width: 0;
+    }
+
+    .dialog-panel-title strong {
+      display: block;
+      font-size: 13px;
+      letter-spacing: 0.02em;
+    }
+
+    .dialog-panel-title span {
+      display: block;
+      margin-top: 3px;
+      color: var(--text-subtle);
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .dialog-panel-tools {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .dialog-status {
+      color: var(--text-subtle);
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .dialog-panel-body {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px 14px 14px;
+    }
+
+    .dialog-panel.collapsed .dialog-panel-body {
+      display: none;
+    }
+
+    .dialog-textarea {
+      width: 100%;
+      min-height: 110px;
+      resize: vertical;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 14px;
+      background: rgba(2, 6, 23, 0.76);
+      color: var(--text-main);
+      padding: 12px 14px;
+      font: inherit;
+      font-size: 13px;
+      line-height: 1.65;
+      outline: none;
+    }
+
+    .dialog-textarea:focus {
+      border-color: rgba(56, 189, 248, 0.5);
+      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
+    }
+
+    .dialog-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .dialog-actions-left,
+    .dialog-actions-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .dialog-hint {
+      color: var(--text-subtle);
+      font-size: 11px;
+      line-height: 1.5;
     }
 
     .resize-handle {
@@ -586,6 +706,22 @@
         right: 14px;
       }
 
+      .dialog-panel {
+        min-height: 148px;
+        border-radius: 14px;
+      }
+
+      .dialog-panel-header,
+      .dialog-panel-body {
+        padding-left: 12px;
+        padding-right: 12px;
+      }
+
+      .dialog-textarea {
+        min-height: 96px;
+        font-size: 12px;
+      }
+
       .shell.compact-top .shell-header,
       .shell.compact-top .tabs-bar {
         display: none;
@@ -657,6 +793,7 @@
           <div class="tool-buttons">
             <a class="tool-button" href="/codex-system" target="_blank" rel="noreferrer">系统概览</a>
             <a class="tool-button" href="/codex-files" target="_blank" rel="noreferrer">文件管理</a>
+            <button class="tool-button" id="toggleDialogPanelButton" type="button">对话窗</button>
             <button class="tool-button" id="copySelectionButton" type="button">复制选中</button>
             <button class="tool-button" id="copyVisibleButton" type="button">复制可见内容</button>
             <button class="tool-button" id="centerButton" type="button">居中</button>
@@ -675,6 +812,31 @@
       <div class="terminal-wrap">
         <button class="mobile-fold-toggle" id="mobileToggleChromeButton" type="button">收起顶部</button>
         <div class="terminal-stack" id="terminalStack"></div>
+        <section class="dialog-panel" id="dialogPanel">
+          <div class="dialog-panel-header">
+            <div class="dialog-panel-title">
+              <strong>终端对话窗口</strong>
+              <span>先在这里组织多行指令或对话，再一键发送到当前终端标签。</span>
+            </div>
+            <div class="dialog-panel-tools">
+              <span class="dialog-status" id="dialogStatus">草稿自动保存在浏览器本地</span>
+              <button class="tool-button" id="collapseDialogButton" type="button">收起</button>
+            </div>
+          </div>
+          <div class="dialog-panel-body">
+            <textarea class="dialog-textarea" id="dialogTextarea" placeholder="在这里输入你要发给当前终端的内容。支持多行。按 Ctrl+Enter 可直接发送到当前终端。"></textarea>
+            <div class="dialog-actions">
+              <div class="dialog-actions-left">
+                <button class="tool-button" id="sendDialogButton" type="button">发送到终端</button>
+                <button class="tool-button" id="copyDialogButton" type="button">复制草稿</button>
+                <button class="tool-button" id="clearDialogButton" type="button">清空草稿</button>
+              </div>
+              <div class="dialog-actions-right">
+                <span class="dialog-hint">发送失败时会自动退回到复制剪贴板，你只需在终端里粘贴即可。</span>
+              </div>
+            </div>
+          </div>
+        </section>
         <div class="copy-toast" id="copyToast" aria-live="polite"></div>
         <div class="terminal-note">终端内不方便框选时，可直接用“复制选中”或“复制可见内容”</div>
       </div>
@@ -693,32 +855,42 @@
     <div id="terminal"></div>
   </div>
 
+  <script src="./auth_token.js"></script>
+  <script src="./config.js"></script>
   <script>
     (() => {
       const params = new URLSearchParams(window.location.search);
-      const debugEnabled = params.get("debug") === "1" || window.localStorage.getItem("codex-web-terminal-debug") === "1";
+      const debugEnabled = params.get("debug") === "1" || localStorage.getItem("codex-web-terminal-debug") === "1";
       const debug = (...args) => {
-        if (debugEnabled) console.debug("[codex-web-terminal]", ...args);
+        if (!debugEnabled) return;
+        console.debug("[codex-web-terminal]", ...args);
       };
       const isEmbed = params.get("embed") === "1";
       let rafId = 0;
+      let dispatchingSyntheticResize = false;
 
       const dispatchResize = () => {
         if (rafId) cancelAnimationFrame(rafId);
         rafId = requestAnimationFrame(() => {
           rafId = 0;
-          document.querySelectorAll(".terminal-frame").forEach((frame) => {
-            try {
-              if (frame.contentWindow) frame.contentWindow.dispatchEvent(new Event("resize"));
-            } catch (_error) {
-            }
-          });
+          dispatchingSyntheticResize = true;
+          try {
+            window.dispatchEvent(new Event("resize"));
+          } finally {
+            dispatchingSyntheticResize = false;
+          }
         });
       };
 
       const updateViewportHeight = () => {
         const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
         document.documentElement.style.setProperty("--app-height", `${Math.round(viewportHeight)}px`);
+        debug("viewport:update", {
+          viewportHeight,
+          innerHeight: window.innerHeight,
+          mobile: window.matchMedia("(max-width: 980px)").matches,
+          embed: isEmbed
+        });
         dispatchResize();
       };
 
@@ -732,7 +904,10 @@
           window.visualViewport.addEventListener("resize", updateViewportHeight);
           window.visualViewport.addEventListener("scroll", updateViewportHeight);
         }
-        window.addEventListener("resize", updateViewportHeight);
+        window.addEventListener("resize", () => {
+          if (dispatchingSyntheticResize) return;
+          updateViewportHeight();
+        });
         window.addEventListener("orientationchange", updateViewportHeight);
         window.setTimeout(updateViewportHeight, 80);
         window.setTimeout(updateViewportHeight, 320);
@@ -750,8 +925,16 @@
       const terminalStack = document.getElementById("terminalStack");
       const centerButton = document.getElementById("centerButton");
       const fitButton = document.getElementById("fitButton");
+      const toggleDialogPanelButton = document.getElementById("toggleDialogPanelButton");
       const copySelectionButton = document.getElementById("copySelectionButton");
       const copyVisibleButton = document.getElementById("copyVisibleButton");
+      const dialogPanel = document.getElementById("dialogPanel");
+      const dialogTextarea = document.getElementById("dialogTextarea");
+      const dialogStatus = document.getElementById("dialogStatus");
+      const collapseDialogButton = document.getElementById("collapseDialogButton");
+      const sendDialogButton = document.getElementById("sendDialogButton");
+      const copyDialogButton = document.getElementById("copyDialogButton");
+      const clearDialogButton = document.getElementById("clearDialogButton");
       const renameTabButton = document.getElementById("renameTabButton");
       const duplicateTabButton = document.getElementById("duplicateTabButton");
       const newTabButton = document.getElementById("newTabButton");
@@ -762,6 +945,8 @@
       const layoutKey = "codex-web-terminal-layout-v3";
       const tabsKey = "codex-web-terminal-tabs-v3";
       const mobileChromeKey = "codex-web-terminal-mobile-top-v1";
+      const dialogDraftKey = "codex-web-terminal-dialog-draft-v1";
+      const dialogPanelKey = "codex-web-terminal-dialog-panel-v1";
 
       let dragState = null;
       let resizeState = null;
@@ -968,7 +1153,28 @@
       };
 
       const frameSrc = (tab) =>
-        `${window.location.origin}/codex-terminal/?arg=${encodeURIComponent(tab.session)}`;
+        `${baseUrl()}?embed=1&tab=${encodeURIComponent(tab.id)}&arg=${encodeURIComponent(tab.session)}`;
+      const readDialogPanelState = () => localStorage.getItem(dialogPanelKey) !== "collapsed";
+      const writeDialogPanelState = (expanded) => localStorage.setItem(dialogPanelKey, expanded ? "expanded" : "collapsed");
+      const applyDialogPanelState = (expanded) => {
+        const nextExpanded = Boolean(expanded);
+        dialogPanel.classList.toggle("collapsed", !nextExpanded);
+        collapseDialogButton.textContent = nextExpanded ? "收起" : "展开";
+        toggleDialogPanelButton.classList.toggle("is-success", nextExpanded);
+        toggleDialogPanelButton.textContent = nextExpanded ? "对话窗已开" : "对话窗";
+        dispatchResize();
+      };
+      const restoreDialogDraft = () => {
+        const draft = localStorage.getItem(dialogDraftKey) || "";
+        dialogTextarea.value = draft;
+      };
+      const updateDialogStatus = (message) => {
+        if (dialogStatus) dialogStatus.textContent = message;
+      };
+      const saveDialogDraft = () => {
+        localStorage.setItem(dialogDraftKey, dialogTextarea.value);
+        updateDialogStatus(dialogTextarea.value.trim() ? "草稿已自动保存到浏览器本地" : "草稿为空");
+      };
 
       const renameTab = (tabId) => {
         const tab = tabs.find((item) => item.id === tabId);
@@ -1143,6 +1349,82 @@
         const copied = await copyText(getFrameVisibleText(frame), "已复制");
         if (copied) setCopyButtonState(copyVisibleButton, copied);
       };
+      const getTerminalInputTarget = (frame) => {
+        try {
+          const doc = frame?.contentDocument;
+          if (!doc) return null;
+          return doc.querySelector(".xterm-helper-textarea, textarea");
+        } catch (_error) {
+          return null;
+        }
+      };
+      const sendTextToTerminal = async (value) => {
+        const text = normalizeCopiedText(value || "");
+        if (!text) {
+          showCopyToast("对话窗口还是空的，先输入内容。", false);
+          return false;
+        }
+        const payload = text.endsWith("\n") ? text : `${text}\n`;
+        const frame = activeFrame();
+        const target = getTerminalInputTarget(frame);
+        if (!frame || !target) {
+          const copied = await copyText(payload, "已复制");
+          if (copied) {
+            setCopyButtonState(sendDialogButton, copied);
+            updateDialogStatus("未找到终端输入框，已退回到复制剪贴板");
+          }
+          return false;
+        }
+        try {
+          frame.contentWindow?.focus?.();
+          target.focus?.();
+          let sent = false;
+          try {
+            const data = new DataTransfer();
+            data.setData("text/plain", payload);
+            const pasteEvent = new ClipboardEvent("paste", {
+              clipboardData: data,
+              bubbles: true,
+              cancelable: true
+            });
+            target.dispatchEvent(pasteEvent);
+            sent = true;
+          } catch (_error) {
+          }
+          if (!sent) {
+            try {
+              target.value = payload;
+              target.dispatchEvent(new InputEvent("input", {
+                data: payload,
+                inputType: "insertText",
+                bubbles: true,
+                cancelable: true
+              }));
+              sent = true;
+            } catch (_error) {
+            }
+          }
+          if (!sent) {
+            const copied = await copyText(payload, "已复制");
+            if (copied) {
+              setCopyButtonState(sendDialogButton, copied);
+              updateDialogStatus("终端注入失败，已复制到剪贴板");
+            }
+            return false;
+          }
+          setCopyButtonState(sendDialogButton, "已发送");
+          updateDialogStatus("内容已发送到当前终端");
+          showCopyToast("已发送到当前终端");
+          return true;
+        } catch (_error) {
+          const copied = await copyText(payload, "已复制");
+          if (copied) {
+            setCopyButtonState(sendDialogButton, copied);
+            updateDialogStatus("发送异常，已复制到剪贴板");
+          }
+          return false;
+        }
+      };
 
       const centerLayout = () => {
         debug("centerLayout");
@@ -1258,8 +1540,31 @@
 
       centerButton.addEventListener("click", centerLayout);
       fitButton.addEventListener("click", fitLayout);
+      toggleDialogPanelButton.addEventListener("click", () => {
+        const expanded = dialogPanel.classList.contains("collapsed");
+        writeDialogPanelState(expanded);
+        applyDialogPanelState(expanded);
+      });
       copySelectionButton.addEventListener("click", copyCurrentSelection);
       copyVisibleButton.addEventListener("click", copyCurrentVisibleText);
+      collapseDialogButton.addEventListener("click", () => {
+        const expanded = dialogPanel.classList.contains("collapsed");
+        writeDialogPanelState(expanded);
+        applyDialogPanelState(expanded);
+      });
+      sendDialogButton.addEventListener("click", () => {
+        sendTextToTerminal(dialogTextarea.value);
+      });
+      copyDialogButton.addEventListener("click", async () => {
+        const copied = await copyText(dialogTextarea.value, "已复制");
+        if (copied) setCopyButtonState(copyDialogButton, copied);
+      });
+      clearDialogButton.addEventListener("click", () => {
+        dialogTextarea.value = "";
+        saveDialogDraft();
+        updateDialogStatus("草稿已清空");
+      });
+      dialogTextarea.addEventListener("input", saveDialogDraft);
       renameTabButton.addEventListener("click", () => {
         if (!activeTabId) return;
         renameTab(activeTabId);
@@ -1272,7 +1577,10 @@
         applyMobileChromeState(nextCollapsed);
       });
       shellHeader.addEventListener("dblclick", centerLayout);
-      window.addEventListener("resize", loadLayout);
+      window.addEventListener("resize", () => {
+        if (dispatchingSyntheticResize) return;
+        loadLayout();
+      });
       if (window.visualViewport) {
         window.visualViewport.addEventListener("resize", loadLayout);
         window.visualViewport.addEventListener("scroll", loadLayout);
@@ -1291,11 +1599,17 @@
           event.preventDefault();
           copyCurrentVisibleText();
         }
+        if (event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey && event.key === "Enter" && document.activeElement === dialogTextarea) {
+          event.preventDefault();
+          sendTextToTerminal(dialogTextarea.value);
+        }
       });
 
       new ResizeObserver(() => dispatchResize()).observe(shell);
       updateViewportHeight();
       syncMobileChromeState();
+      restoreDialogDraft();
+      applyDialogPanelState(readDialogPanelState());
       loadTabs().then(() => {
         renderTabs();
         loadLayout();
