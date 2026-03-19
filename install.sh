@@ -25,6 +25,8 @@ CODEX_BIN="${CODEX_BIN:-$(command -v codex || true)}"
 CODEX_BIN_DIR=""
 SESSION_SECRET=""
 COOKIE_NAME=""
+CONFIG_FILE="${CONFIG_FILE:-/etc/codex-web-terminal.env}"
+CODEX_MAIN_RESUME_ID="${CODEX_MAIN_RESUME_ID:-}"
 
 require_root() {
   if [[ "${EUID}" -ne 0 ]]; then
@@ -128,18 +130,47 @@ set -euo pipefail
 
 export HOME=$WORKDIR
 export TERM="\${TERM:-xterm-256color}"
+export COLORTERM="\${COLORTERM:-truecolor}"
+export FORCE_COLOR="\${FORCE_COLOR:-1}"
+export CLICOLOR_FORCE="\${CLICOLOR_FORCE:-1}"
+export TERM_PROGRAM="\${TERM_PROGRAM:-tmux}"
 export PATH="$CODEX_BIN_DIR:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:$WORKDIR/bin:\${PATH:-}"
+CONFIG_FILE="\${CODEX_WEB_CONFIG_FILE:-$CONFIG_FILE}"
 
-session_name="\${1:-codex-main}"
-session_name="\$(printf '%s' "\$session_name" | tr -cd '[:alnum:]-_' | cut -c1-48)"
-session_name="\${session_name:-codex-main}"
-
-if /usr/bin/tmux has-session -t "\$session_name" 2>/dev/null; then
-  exit 0
+if [[ -f "$CONFIG_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$CONFIG_FILE"
 fi
 
-cd $WORKDIR
-exec /usr/bin/tmux new-session -d -s "\$session_name" -c $WORKDIR '/bin/bash -lc "export PATH=$CODEX_BIN_DIR:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:$WORKDIR/bin:\$PATH; exec codex"'
+raw_session="${1:-codex-main}"
+session_name="$(printf '%s' "$raw_session" | tr -cd '[:alnum:]-_' | cut -c1-48)"
+session_name="${session_name:-codex-main}"
+main_resume_id="${CODEX_MAIN_RESUME_ID:-}"
+
+build_launch_command() {
+  if [[ "$session_name" == "codex-main" && -n "$main_resume_id" ]]; then
+    printf "exec codex resume %q" "$main_resume_id"
+    return
+  fi
+  printf "exec codex"
+}
+
+ensure_session_running() {
+  local launch_command pane_dead
+  launch_command="$(build_launch_command)"
+
+  if ! /usr/bin/tmux has-session -t "$session_name" 2>/dev/null; then
+    /usr/bin/tmux new-session -d -s "$session_name" -c /root "bash -lc '$launch_command'"
+    return
+  fi
+
+  pane_dead="$(/usr/bin/tmux display-message -p -t "${session_name}:0.0" '#{pane_dead}' 2>/dev/null || printf '1')"
+  if [[ "$pane_dead" == "1" ]]; then
+    /usr/bin/tmux respawn-pane -k -t "${session_name}:0.0" -c /root "bash -lc '$launch_command'"
+  fi
+}
+
+ensure_session_running
 EOF
   chmod 0755 "$MAIN_BOOTSTRAP_PATH"
 }
@@ -165,6 +196,16 @@ $MAIN_BOOTSTRAP_PATH "\$session_name"
 exec /usr/bin/tmux attach-session -t "\$session_name"
 EOF
   chmod 0755 "$WRAPPER_PATH"
+}
+
+write_codex_config() {
+  if [[ -z "$CODEX_MAIN_RESUME_ID" ]]; then
+    return
+  fi
+  umask 077
+  cat >"$CONFIG_FILE" <<EOF
+CODEX_MAIN_RESUME_ID=$CODEX_MAIN_RESUME_ID
+EOF
 }
 
 write_terminal_wrapper() {
@@ -997,6 +1038,19 @@ reload_services() {
   systemctl restart nginx
 }
 
+warm_primary_session() {
+  if /usr/bin/tmux has-session -t codex-main 2>/dev/null; then
+    return
+  fi
+
+  if [[ -n "$CODEX_MAIN_RESUME_ID" ]]; then
+    /usr/bin/tmux new-session -d -s codex-main -c /root "bash -lc 'exec codex resume $CODEX_MAIN_RESUME_ID'"
+    return
+  fi
+
+  /usr/bin/tmux new-session -d -s codex-main -c /root "bash -lc 'exec codex'"
+}
+
 print_summary() {
   local host_display
   host_display="$SERVER_NAME"
@@ -1008,6 +1062,7 @@ print_summary() {
 
 installed:
 - ui: $UI_DIR
+- config: $CONFIG_FILE
 - helper env: $HELPER_ENV_FILE
 - helper bin: $HELPER_BIN_PATH
 - terminal bin: $TERMINAL_WRAPPER_PATH
@@ -1030,6 +1085,11 @@ checks:
 - systemctl status ${MAIN_SERVICE_NAME}.service --no-pager
 - systemctl status ${HELPER_SERVICE_NAME}.service --no-pager
 - systemctl status ${SERVICE_NAME}.service --no-pager
+
+notes:
+- 主 tmux 会话固定为 codex-main
+- 如果设置 CODEX_MAIN_RESUME_ID，主标签会固定恢复到指定对话
+- 额外标签页继续创建独立的 codex-tab-* tmux 会话
 EOF
 }
 
@@ -1039,6 +1099,7 @@ main() {
   ensure_codex
   generate_secrets
   copy_ui
+  write_codex_config
   write_main_bootstrap
   write_shell_wrapper
   write_terminal_wrapper
@@ -1050,6 +1111,7 @@ main() {
   write_nginx_config
   cleanup_legacy_services
   reload_services
+  warm_primary_session
   print_summary
 }
 
