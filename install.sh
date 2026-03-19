@@ -22,7 +22,7 @@ MAIN_SERVICE_FILE="/etc/systemd/system/${MAIN_SERVICE_NAME}.service"
 HELPER_SERVICE_FILE="/etc/systemd/system/${HELPER_SERVICE_NAME}.service"
 TERMINAL_SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 CODEX_BIN="${CODEX_BIN:-$(command -v codex || true)}"
-CODEX_MAIN_RESUME_ID="${CODEX_MAIN_RESUME_ID:-019cdbeb-e315-7ad0-8af6-a871ac6eeb26}"
+CODEX_WEB_DEFAULT_COMMAND="${CODEX_WEB_DEFAULT_COMMAND:-exec /bin/bash -li}"
 CODEX_BIN_DIR=""
 SESSION_SECRET=""
 COOKIE_NAME=""
@@ -145,14 +145,10 @@ fi
 raw_session="${1:-codex-main}"
 session_name="$(printf '%s' "$raw_session" | tr -cd '[:alnum:]-_' | cut -c1-48)"
 session_name="${session_name:-codex-main}"
-main_resume_id="${CODEX_MAIN_RESUME_ID:-}"
+default_command="${CODEX_WEB_DEFAULT_COMMAND:-exec /bin/bash -li}"
 
 build_launch_command() {
-  if [[ "$session_name" == "codex-main" && -n "$main_resume_id" ]]; then
-    printf "exec codex resume %q" "$main_resume_id"
-    return
-  fi
-  printf "exec codex"
+  printf "%s" "$default_command"
 }
 
 ensure_session_running() {
@@ -199,12 +195,12 @@ EOF
 }
 
 write_codex_config() {
-  if [[ -z "$CODEX_MAIN_RESUME_ID" ]]; then
+  if [[ -z "$CODEX_WEB_DEFAULT_COMMAND" ]]; then
     return
   fi
   umask 077
   cat >"$CONFIG_FILE" <<EOF
-CODEX_MAIN_RESUME_ID=$CODEX_MAIN_RESUME_ID
+CODEX_WEB_DEFAULT_COMMAND=$CODEX_WEB_DEFAULT_COMMAND
 EOF
 }
 
@@ -318,7 +314,7 @@ def safe_next(target):
 
 def session_title(session_name):
     if session_name == "codex-main":
-        return "主终端"
+        return "系统终端"
     suffix = session_name.replace("codex-tab-", "", 1)
     label = suffix.split("-", 1)[0] if suffix else session_name
     return f"终端 {label}"
@@ -336,7 +332,7 @@ def list_codex_sessions():
             seen.add(name)
             items.append({"session": name, "title": session_title(name)})
     if not items:
-        items.append({"session": "codex-main", "title": "主终端"})
+        items.append({"session": "codex-main", "title": "系统终端"})
     items.sort(key=lambda item: (0 if item["session"] == "codex-main" else 1, item["session"]))
     return items
 
@@ -1043,12 +1039,7 @@ warm_primary_session() {
     return
   fi
 
-  if [[ -n "$CODEX_MAIN_RESUME_ID" ]]; then
-    /usr/bin/tmux new-session -d -s codex-main -c /root "bash -lc 'exec codex resume $CODEX_MAIN_RESUME_ID'"
-    return
-  fi
-
-  /usr/bin/tmux new-session -d -s codex-main -c /root "bash -lc 'exec codex'"
+  /usr/bin/tmux new-session -d -s codex-main -c /root "bash -lc 'exec /bin/bash -li'"
 }
 
 print_summary() {
@@ -1088,7 +1079,7 @@ checks:
 
 notes:
 - 主 tmux 会话固定为 codex-main
-- 如果设置 CODEX_MAIN_RESUME_ID，主标签会固定恢复到指定对话
+- 默认主标签和新标签都进入系统 Shell，不自动启动 codex
 - 额外标签页继续创建独立的 codex-tab-* tmux 会话
 EOF
 }

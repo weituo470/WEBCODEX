@@ -9,7 +9,7 @@
 - 自定义 helper 负责网页登录、cookie 会话、会话列表、系统页、文件页
 - 外层是多标签 Web UI，支持复制标签、重命名、移动端适配
 - `nginx auth_request` 负责统一鉴权
-- 可通过 `CODEX_MAIN_RESUME_ID` 把默认主标签固定到指定 `codex resume <conversation_id>`
+- 默认主标签和新标签都进入系统 Shell，不自动启动 `codex`
 
 ## 公开入口
 
@@ -30,16 +30,6 @@
 curl -fsSL https://raw.githubusercontent.com/weituo470/WEBCODEX/main/bootstrap.sh | \
 WEB_PASSWORD='ReplaceThisNow123!' \
 SERVER_NAME='_' \
-bash
-```
-
-如果要把默认主标签固定到某个指定对话：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/weituo470/WEBCODEX/main/bootstrap.sh | \
-WEB_PASSWORD='ReplaceThisNow123!' \
-SERVER_NAME='_' \
-CODEX_MAIN_RESUME_ID='019cdbeb-e315-7ad0-8af6-a871ac6eeb26' \
 bash
 ```
 
@@ -64,15 +54,6 @@ chmod +x install.sh
 WEB_PASSWORD='ReplaceThisNow123!' SERVER_NAME='_' ./install.sh
 ```
 
-如果要固定主对话：
-
-```bash
-WEB_PASSWORD='ReplaceThisNow123!' \
-SERVER_NAME='_' \
-CODEX_MAIN_RESUME_ID='019cdbeb-e315-7ad0-8af6-a871ac6eeb26' \
-./install.sh
-```
-
 ## 安装器做的事
 
 - 安装依赖: `tmux`、`nginx`、`curl`、`openssl`、`tar`、`python3`、`ttyd`
@@ -93,7 +74,7 @@ WORKDIR='/root'
 TERMINAL_PORT='8765'
 HELPER_PORT='8780'
 UI_DIR='/opt/codex-web-ui'
-CODEX_MAIN_RESUME_ID='019cdbeb-e315-7ad0-8af6-a871ac6eeb26'
+CODEX_WEB_DEFAULT_COMMAND='exec /bin/bash -li'
 ```
 
 ## 关键设计
@@ -102,7 +83,7 @@ CODEX_MAIN_RESUME_ID='019cdbeb-e315-7ad0-8af6-a871ac6eeb26'
 - 不再依赖 `gotty/hterm` 作为主终端渲染
 - 不再通过 nginx 解析 cookie 正则做登录判断
 - 会话恢复和多标签切换都围绕 `tmux` 会话名实现
-- 如果设置 `CODEX_MAIN_RESUME_ID`，主标签在首次启动和异常退出后重启时都会恢复到该对话
+- 默认主标签和新标签都会进入系统 Shell
 
 ## 备注
 

@@ -960,7 +960,7 @@
       const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const createPrimaryTab = () => ({
         id: "main",
-        title: "主终端",
+        title: "系统终端",
         session: "codex-main"
       });
       const isPrimaryTab = (tab) => tab && tab.session === "codex-main";
