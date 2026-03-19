@@ -160,6 +160,12 @@
       background: rgba(14, 165, 233, 0.14);
     }
 
+    .tool-button.is-success {
+      border-color: rgba(34, 197, 94, 0.5);
+      background: rgba(34, 197, 94, 0.16);
+      color: #dcfce7;
+    }
+
     .tabs-bar {
       display: flex;
       align-items: stretch;
@@ -309,6 +315,31 @@
       letter-spacing: 0.02em;
       backdrop-filter: blur(10px);
       z-index: 2;
+    }
+
+    .copy-toast {
+      position: absolute;
+      left: 20px;
+      bottom: 18px;
+      z-index: 3;
+      max-width: min(52vw, 420px);
+      padding: 9px 12px;
+      border-radius: 12px;
+      background: rgba(7, 15, 24, 0.88);
+      border: 1px solid rgba(56, 189, 248, 0.24);
+      color: rgba(226, 232, 240, 0.88);
+      font-size: 12px;
+      line-height: 1.5;
+      backdrop-filter: blur(10px);
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      pointer-events: none;
+    }
+
+    .copy-toast.show {
+      opacity: 1;
+      transform: translateY(0);
     }
 
     .resize-handle {
@@ -626,6 +657,8 @@
           <div class="tool-buttons">
             <a class="tool-button" href="/codex-system" target="_blank" rel="noreferrer">系统概览</a>
             <a class="tool-button" href="/codex-files" target="_blank" rel="noreferrer">文件管理</a>
+            <button class="tool-button" id="copySelectionButton" type="button">复制选中</button>
+            <button class="tool-button" id="copyVisibleButton" type="button">复制可见内容</button>
             <button class="tool-button" id="centerButton" type="button">居中</button>
             <button class="tool-button" id="fitButton" type="button">最大化</button>
           </div>
@@ -642,7 +675,8 @@
       <div class="terminal-wrap">
         <button class="mobile-fold-toggle" id="mobileToggleChromeButton" type="button">收起顶部</button>
         <div class="terminal-stack" id="terminalStack"></div>
-        <div class="terminal-note">主标签固定为同一条长期对话且不可关闭；如需调试日志，请在地址后加 `?debug=1`</div>
+        <div class="copy-toast" id="copyToast" aria-live="polite"></div>
+        <div class="terminal-note">终端内不方便框选时，可直接用“复制选中”或“复制可见内容”</div>
       </div>
       <div class="resize-handle" data-dir="n" aria-hidden="true"></div>
       <div class="resize-handle" data-dir="s" aria-hidden="true"></div>
@@ -716,10 +750,13 @@
       const terminalStack = document.getElementById("terminalStack");
       const centerButton = document.getElementById("centerButton");
       const fitButton = document.getElementById("fitButton");
+      const copySelectionButton = document.getElementById("copySelectionButton");
+      const copyVisibleButton = document.getElementById("copyVisibleButton");
       const renameTabButton = document.getElementById("renameTabButton");
       const duplicateTabButton = document.getElementById("duplicateTabButton");
       const newTabButton = document.getElementById("newTabButton");
       const mobileToggleChromeButton = document.getElementById("mobileToggleChromeButton");
+      const copyToast = document.getElementById("copyToast");
       const resizeHandles = Array.from(document.querySelectorAll(".resize-handle"));
       const mobileMedia = window.matchMedia("(max-width: 980px)");
       const layoutKey = "codex-web-terminal-layout-v3";
@@ -730,6 +767,7 @@
       let resizeState = null;
       let activeTabId = null;
       let tabs = [];
+      let copyToastTimer = 0;
 
       const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
       const desktopBounds = () => ({ width: window.innerWidth, height: window.innerHeight });
@@ -1013,6 +1051,98 @@
       };
 
       const currentRect = () => shell.getBoundingClientRect();
+      const activeFrame = () => terminalStack.querySelector(`.terminal-frame[data-tab-id="${activeTabId}"]`);
+      const showCopyToast = (message, ok = true) => {
+        if (!copyToast) return;
+        copyToast.textContent = message;
+        copyToast.classList.add("show");
+        copyToast.style.borderColor = ok ? "rgba(34, 197, 94, 0.32)" : "rgba(248, 113, 113, 0.36)";
+        copyToast.style.color = ok ? "rgba(220, 252, 231, 0.96)" : "rgba(254, 226, 226, 0.96)";
+        clearTimeout(copyToastTimer);
+        copyToastTimer = window.setTimeout(() => {
+          copyToast.classList.remove("show");
+        }, 1800);
+      };
+      const setCopyButtonState = (button, label) => {
+        if (!button) return;
+        const original = button.dataset.originalLabel || button.textContent;
+        if (!button.dataset.originalLabel) button.dataset.originalLabel = original;
+        button.textContent = label;
+        button.classList.add("is-success");
+        window.setTimeout(() => {
+          button.textContent = button.dataset.originalLabel || original;
+          button.classList.remove("is-success");
+        }, 1200);
+      };
+      const normalizeCopiedText = (value) => value
+        .replace(/\u00a0/g, " ")
+        .replace(/\r/g, "")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+      const getFrameSelectionText = (frame) => {
+        try {
+          return normalizeCopiedText(frame?.contentWindow?.getSelection?.().toString?.() || "");
+        } catch (_error) {
+          return "";
+        }
+      };
+      const getFrameVisibleText = (frame) => {
+        try {
+          const doc = frame?.contentDocument;
+          if (!doc) return "";
+          const candidates = [
+            ".xterm-accessibility-tree",
+            ".xterm-rows",
+            ".terminal"
+          ];
+          for (const selector of candidates) {
+            const el = doc.querySelector(selector);
+            const text = normalizeCopiedText(el?.innerText || el?.textContent || "");
+            if (text) return text;
+          }
+          return normalizeCopiedText(doc.body?.innerText || "");
+        } catch (_error) {
+          return "";
+        }
+      };
+      const copyText = async (value, successLabel) => {
+        const text = normalizeCopiedText(value || "");
+        if (!text) {
+          showCopyToast("没有可复制的内容，先在终端里选中，或使用“复制可见内容”。", false);
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(text);
+          showCopyToast(`已复制 ${Math.min(text.length, 9999)} 个字符`);
+          return successLabel;
+        } catch (_error) {
+          const helper = document.createElement("textarea");
+          helper.value = text;
+          helper.setAttribute("readonly", "readonly");
+          helper.style.position = "fixed";
+          helper.style.opacity = "0";
+          document.body.appendChild(helper);
+          helper.select();
+          const ok = document.execCommand("copy");
+          document.body.removeChild(helper);
+          if (!ok) {
+            showCopyToast("复制失败，请检查浏览器剪贴板权限。", false);
+            return "";
+          }
+          showCopyToast(`已复制 ${Math.min(text.length, 9999)} 个字符`);
+          return successLabel;
+        }
+      };
+      const copyCurrentSelection = async () => {
+        const frame = activeFrame();
+        const copied = await copyText(getFrameSelectionText(frame), "已复制");
+        if (copied) setCopyButtonState(copySelectionButton, copied);
+      };
+      const copyCurrentVisibleText = async () => {
+        const frame = activeFrame();
+        const copied = await copyText(getFrameVisibleText(frame), "已复制");
+        if (copied) setCopyButtonState(copyVisibleButton, copied);
+      };
 
       const centerLayout = () => {
         debug("centerLayout");
@@ -1128,6 +1258,8 @@
 
       centerButton.addEventListener("click", centerLayout);
       fitButton.addEventListener("click", fitLayout);
+      copySelectionButton.addEventListener("click", copyCurrentSelection);
+      copyVisibleButton.addEventListener("click", copyCurrentVisibleText);
       renameTabButton.addEventListener("click", () => {
         if (!activeTabId) return;
         renameTab(activeTabId);
@@ -1153,6 +1285,12 @@
           innerHeight: window.innerHeight,
           mobile: mobileMedia.matches
         });
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.altKey && !event.shiftKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === "c") {
+          event.preventDefault();
+          copyCurrentVisibleText();
+        }
       });
 
       new ResizeObserver(() => dispatchResize()).observe(shell);
